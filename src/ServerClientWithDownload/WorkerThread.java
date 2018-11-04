@@ -8,6 +8,7 @@ import java.util.StringTokenizer;
 
 
 class WorkerThread implements Runnable {
+    final static String CRLF = "\r\n";
     private Socket socket;
     private InputStream is;
     private OutputStream os;
@@ -44,7 +45,7 @@ class WorkerThread implements Runnable {
 
                     //str = br.readLine();
                     StringTokenizer tokens = new StringTokenizer(str);
-                   // System.out.println(tokens.nextToken());
+                    // System.out.println(tokens.nextToken());
 
                     if (str.equals("BYE")) {
                         System.out.println("[" + id + "] says: BYE. Worker thread will terminate now.");
@@ -86,6 +87,52 @@ class WorkerThread implements Runnable {
 
                     } else if (tokens.nextToken().equals("GET")) {
                         System.out.println("in get");
+
+                        String fileName = tokens.nextToken();
+                        fileName = "." + fileName;
+
+                        // Open the requested file.
+                        FileInputStream fis = null;
+                        boolean fileExists = true;
+                        try {
+                            fis = new FileInputStream(fileName);
+                        } catch (FileNotFoundException e) {
+                            fileExists = false;
+                        }
+
+                        // Construct the response message.
+                        String statusLine = null;
+                        String contentTypeLine = null;
+                        String entityBody = null;
+                        if (fileExists) {
+                            statusLine = "HTTP/1.0 200 OK" + CRLF;
+                            contentTypeLine = "Content-Type: " +
+                                    contentType(fileName) + CRLF;
+                        } else {
+                            statusLine = "HTTP/1.0 404 Not Found" + CRLF;
+                            contentTypeLine = "Content-Type: text/html" + CRLF;
+                            entityBody = "<HTML>" +
+                                    "<HEAD><TITLE>Not Found</TITLE></HEAD>" +
+                                    "<BODY>Not Found</BODY></HTML>";
+                        }
+                        // Send the status line.
+                        os.write(statusLine.getBytes());
+                        //os.writeBytes(statusLine);
+
+                        // Send the content type line.
+                        os.write(contentTypeLine.getBytes());
+
+                        // Send a blank line to indicate the end of the header lines.
+                        os.write(CRLF.getBytes());
+
+                        // Send the entity body.
+                        if (fileExists) {
+                            sendBytes(fis, os);
+                            fis.close();
+                        } else {
+                            os.write(entityBody.getBytes()) ;
+                        }
+
                         pr.flush();
                     } else {
                         System.out.println("[" + id + "] says: " + str);
@@ -114,6 +161,31 @@ class WorkerThread implements Runnable {
         System.out.println("Client [" + id + "] is now terminating. No. of worker threads = "
                 + TestServer.workerThreadCount);
     }
+
+
+
+    private static void sendBytes(FileInputStream fis,
+                                  OutputStream os) throws Exception {
+        // Construct a 1K buffer to hold bytes on their way to the socket.
+        byte[] buffer = new byte[1024];
+        int bytes = 0;
+
+        // Copy requested file into the socket's output stream.
+        while ((bytes = fis.read(buffer)) != -1) {
+            os.write(buffer, 0, bytes);
+        }
+    }
+
+    private static String contentType(String fileName) {
+        if(fileName.endsWith(".htm") || fileName.endsWith(".html")) {
+            return "text/html";
+        }
+        if(fileName.endsWith(".ram") || fileName.endsWith(".ra")) {
+            return "audio/x-pn-realaudio";
+        }
+        return "application/octet-stream" ;
+    }
 }
+
 
 
